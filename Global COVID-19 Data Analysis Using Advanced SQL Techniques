@@ -1,0 +1,120 @@
+USE PortfolioProject1
+
+
+SELECT * FROM CovidDeaths ORDER BY 3,4
+
+SELECT * FROM CovidVaccinations ORDER BY 3,4
+
+SELECT date, location, total_cases, new_cases, total_deaths, population FROM CovidDeaths ORDER BY 2,1
+
+
+-- Looking at Total Cases V/S Total Deaths in India (It shows the probability of someone dying if you where born in India)
+
+SELECT location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 AS death_to_cases FROM CovidDeaths
+WHERE location = 'India'
+ORDER BY 1,2
+
+
+--  Looking at Total Cases V/S Population in India (It indicates what percentage of the population has contracted COVID)
+
+SELECT date, location, population, total_cases, (total_cases/population)*100 AS percentage_to_get_covid FROM CovidDeaths
+WHERE location = 'India'
+ORDER BY 2,1
+
+
+--  Looking at countries with highest infection rates compared to population
+
+SELECT location, population, MAX (total_cases) AS highest_infection_count, MAX (total_cases/population)*100 AS percentage_to_get_covid FROM CovidDeaths
+GROUP BY location, population
+ORDER BY percentage_to_get_covid DESC
+
+
+--  Looking at countries with highest death counts per population
+
+SELECT location, MAX (CAST (total_deaths AS INT)) AS highest_death_count FROM CovidDeaths
+WHERE continent is not null
+GROUP BY location
+ORDER BY highest_death_count DESC
+
+
+--  Looking at continents with highest death counts per population
+
+SELECT continent, MAX (CAST (total_deaths AS INT)) AS highest_death_count FROM CovidDeaths
+WHERE continent is not null
+GROUP BY continent
+ORDER BY highest_death_count DESC
+
+
+--  Looking at Total Poplulation V/S Vaccinations
+
+SELECT CD.continent, CD.location,CD.date, CD.population, CV.new_vaccinations 
+FROM [PortfolioProject1].dbo.CovidDeaths AS CD
+JOIN [PortfolioProject1].dbo.CovidVaccinations AS CV
+ON CD.location = CV.location AND CD.date = CV.date
+WHERE CD.continent is not null
+ORDER BY 2,3
+
+
+--  Looking at Total Poplulation V/S Vaccinations (As Rolling Count)
+
+SELECT CD.continent, CD.location,CD.date, CD.population, CV.new_vaccinations,
+SUM (CAST (CV.new_vaccinations AS INT)) OVER (PARTITION BY CD.location ORDER BY CD.location, CD.date) AS People_Vaccinated_RollingCount
+FROM [PortfolioProject1].dbo.CovidDeaths AS CD
+JOIN [PortfolioProject1].dbo.CovidVaccinations AS CV
+ON CD.location = CV.location AND CD.date = CV.date
+WHERE CD.continent is not null
+ORDER BY 2,3
+
+
+			--  Using CTE
+
+				WITH CTE_Pop_VS_Vacc (continent, location, date, population, new_vaccinations, People_Vaccinated_RollingCount) 
+				AS
+				(
+				SELECT CD.continent, CD.location,CD.date, CD.population, CV.new_vaccinations,
+				SUM (CAST (CV.new_vaccinations AS INT)) OVER (PARTITION BY CD.location ORDER BY CD.location, CD.date) AS People_Vaccinated_RollingCount
+				FROM [PortfolioProject1].dbo.CovidDeaths AS CD
+				JOIN [PortfolioProject1].dbo.CovidVaccinations AS CV
+				ON CD.location = CV.location AND CD.date = CV.date
+				WHERE CD.continent is not null
+				--ORDER BY 2,3
+				)
+				SELECT *, (People_Vaccinated_RollingCount/population)*100 FROM CTE_Pop_VS_Vacc
+
+
+			--  TEMP Table
+
+				DROP TABLE IF exists #Percent_Population_Vaccinated
+				CREATE TABLE #Percent_Population_Vaccinated
+				(
+				continent NVARCHAR (255),
+				location NVARCHAR (255),
+				date DATETIME,
+				population NUMERIC,
+				new_vaccinations NUMERIC,
+				People_Vaccinated_RollingCount NUMERIC
+				)
+
+				INSERT INTO #Percent_Population_Vaccinated
+				SELECT CD.continent, CD.location,CD.date, CD.population, CV.new_vaccinations,
+				SUM (CAST (CV.new_vaccinations AS INT)) OVER (PARTITION BY CD.location ORDER BY CD.location, CD.date) AS People_Vaccinated_RollingCount
+				FROM [PortfolioProject1].dbo.CovidDeaths AS CD
+				JOIN [PortfolioProject1].dbo.CovidVaccinations AS CV
+				ON CD.location = CV.location AND CD.date = CV.date
+				--WHERE CD.continent is not null
+				--ORDER BY 2,3
+				SELECT *, (People_Vaccinated_RollingCount/population)*100 FROM #Percent_Population_Vaccinated
+
+
+--  Creating View to stored data for later visualizations
+
+CREATE VIEW Percent_Population_Vaccinated AS
+SELECT CD.continent, CD.location,CD.date, CD.population, CV.new_vaccinations,
+SUM (CAST (CV.new_vaccinations AS INT)) OVER (PARTITION BY CD.location ORDER BY CD.location, CD.date) AS People_Vaccinated_RollingCount
+FROM [PortfolioProject1].dbo.CovidDeaths AS CD
+JOIN [PortfolioProject1].dbo.CovidVaccinations AS CV
+ON CD.location = CV.location AND CD.date = CV.date
+WHERE CD.continent is not null
+--ORDER BY 2,3
+
+SELECT * FROM Percent_Population_Vaccinated
